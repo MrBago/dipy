@@ -198,9 +198,9 @@ class SphHarmModel(OdfModel):
     def sampling_matrix(self, sphere):
         """Returns a matrix that can be used to sample the function from
         coefficients"""
-        x, y, z = sphere.vertices.T
-        r, pol, azi = cart2sphere(x, y, z)
-        S = real_sph_harm(self._m, self._n, azi[:, None], pol[:, None])
+        pol = sphere.theta
+        azi = sphere.phi
+        S = real_sph_harm(self._m, self._n, azi[..., None], pol[..., None])
         return S
 
     def _set_fit_matrix(self, *args):

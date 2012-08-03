@@ -41,12 +41,13 @@ dipy.tracking.utils
 dipy.tracking.integration
 dipy.reconst.interpolate
 """
+import itertools
 import numpy as np
 from numpy import asarray, array, atleast_3d, ceil, concatenate, empty, \
         eye, mgrid, sqrt, zeros, linalg, diag, dot
 from dipy.io.bvectxt import ornt_mapping
 
-def density_map(streamlines, vol_dims, voxel_size):
+def density_map(streamlines, vol_dims, voxel_size, weights=None):
     """Counts the number of unique streamlines that pass though each voxel
 
     Counts the number of points in each streamline that lie inside each voxel.
@@ -81,8 +82,14 @@ def density_map(streamlines, vol_dims, voxel_size):
     [0,0,2] passes though [0,0,1]. Consider subsegmenting the streamlines when
     the edges of the voxels are smaller than the steps of the streamlines.
     """
-    counts = zeros(vol_dims, 'int')
-    for sl in streamlines:
+    if weights is None:
+        weights = itertools.repeat(1)
+        dtype = 'uint'
+    else:
+        dtype = getattr(weights, 'dtype', 'float')
+
+    counts = zeros(vol_dims, dtype)
+    for sl, w in itertools.izip(streamlines, weights):
         inds = (sl // voxel_size).astype('int')
         if inds.min() < 0:
             raise IndexError('streamline has negative values, these values ' +
@@ -90,12 +97,12 @@ def density_map(streamlines, vol_dims, voxel_size):
         i, j, k = inds.T
         #this takes advantage of the fact that numpy's += operator only acts
         #once even if there are repeats in inds
-        counts[i, j, k] += 1
+        counts[i, j, k] += w
     return counts
 
 def connectivity_matrix(streamlines, label_volume, voxel_size,
                         symmetric=False, return_mapping=False,
-                        mapping_as_streamlines=False):
+                        mapping_as_streamlines=False, weights=None):
     """Counts the streamlines that start and end at each label pair
 
     symmetric means we don't distiguish between start and end
@@ -120,7 +127,7 @@ def connectivity_matrix(streamlines, label_volume, voxel_size,
     if symmetric:
         endlabels.sort(0)
     mx = endlabels.max() + 1
-    matrix = ndbincount(endlabels, shape=(mx, mx))
+    matrix = ndbincount(endlabels, weights=weights, shape=(mx, mx))
     if symmetric:
         np.maximum(matrix, matrix.T, out=matrix)
     if return_mapping:

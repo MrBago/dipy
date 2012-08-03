@@ -1,7 +1,7 @@
 from __future__ import division
 import numpy as np
 from .recspeed import local_maxima, remove_similar_vertices
-from dipy.core.sphere import unique_edges
+from dipy.core.sphere import unique_edges, Sphere
 #Classes OdfModel and OdfFit are using API ReconstModel and ReconstFit from .base 
 
 class OdfModel(object):
@@ -19,6 +19,24 @@ class OdfFit(object):
     def odf(self):
         """To be implemented but specific odf models"""
         raise NotImplementedError("To be implemented in sub classes")
+
+
+def peaks(odf_func, fmin, sphere):
+
+    def _helper_func(x):
+        sphere = Sphere(theta=x[0], phi=x[1])
+        return -odf_func(sphere)
+
+    odf = odf_func(sphere)
+    values, indices = local_maxima(odf, sphere.edges)
+    seeds = np.column_stack([sphere.theta[indices], sphere.phi[indices]])
+    result = np.empty_like(seeds)
+    for i, point in enumerate(seeds):
+        result[i] = fmin(_helper_func, point)
+    values = np.array([-_helper_func(point) for point in result])
+    directions = Sphere(theta=result[:, 0], phi=result[:, 1]).vertices
+    return values, directions
+
 
 def peak_directions(odf, sphere, relative_peak_threshold,
                     peak_separation_angle):

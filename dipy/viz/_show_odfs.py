@@ -13,6 +13,26 @@ except ImportError:
     print(e_s)
     
 from dipy.utils.spheremakers import sphere_vf_from
+from dipy.reconst.recspeed import local_maxima
+
+def show_odf_peaks(odf, sphere, representation='wireframe', color=(1,0,0)):
+
+    values, indices = local_maxima(odf, sphere.edges)
+    where_positive = values > 0
+    values = values[where_positive]
+    indices = indices[where_positive]
+    peaks = sphere.vertices[indices]
+
+    scale = abs(odf).max()
+    x, y, z = odf / scale * sphere.vertices.T
+    mlab.triangular_mesh(x, y, z, sphere.faces, color=(0, 0, 0))
+    mlab.triangular_mesh(x, y, z, sphere.faces, representation=representation,
+                         scalars=odf)
+    show_peak_directions(values, peaks, color)
+
+def show_peak_directions(values, peaks, color):
+    a, b, c = peaks.T * (values / values.max())
+    mlab.quiver3d(a, b, c, *(peaks.T * 1.1), mode='2darrow', color=color)
 
 
 def show_odfs(odfs, vertices_faces, image=None, colormap='jet',
