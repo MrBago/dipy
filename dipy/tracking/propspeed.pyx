@@ -254,6 +254,28 @@ cdef  cnp.npy_intp _nearest_direction(double* dx,double* qa,\
             direction[j]= odf_vertices[3*<cnp.npy_intp>ind[max_doti]+j]
         return 1
 
+def prop_dir(cnp.ndarray[cnp.float_t, ndim=1, mode='c'] point,
+             cnp.ndarray[cnp.float_t, ndim=1, mode='c'] dx,
+             cnp.ndarray[cnp.float_t, ndim=4, mode='c'] qa,
+             cnp.ndarray[cnp.float_t, ndim=4, mode='c'] ind,
+             cnp.ndarray[cnp.float_t, ndim=2, mode='c'] odf_vertices,
+             double qa_thr,
+             double ang_thr,
+             double total_weight):
+
+    cdef:
+        cnp.npy_intp qa_shape[4], strides[4]
+        cnp.ndarray[cnp.float_t, ndim=1, mode='c'] direction = dx.copy()
+    for i in range(4):
+        qa_shape[i] = qa.shape[i]
+        strides[i] = qa.strides[i]
+
+    _propagation_direction(&point[0], &dx[0], &qa[0, 0, 0, 0],
+                           &ind[0, 0, 0, 0], &odf_vertices[0, 0],
+                           qa_thr, ang_thr,
+                           &qa_shape[0], &strides[0],
+                           &direction[0], total_weight)
+    return direction
 
 @cython.cdivision(True)
 cdef cnp.npy_intp _propagation_direction(double *point,double* dx,double* qa,\

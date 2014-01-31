@@ -33,7 +33,7 @@ def test_BoundaryStepper():
 
 def test_FixedSizeStepper():
     fsi = FixedSizeStepper(step_size=2.)
-    loc = np.array([2, 3, 12])
+    loc = np.array([2, 3, 12]) + 0.
     step = np.array([3, 2, 4]) / np.sqrt(3)
     assert_array_almost_equal(fsi(loc, step), loc + 2. * step)
     assert_array_almost_equal(fsi(loc, -step), loc - 2. * step)
@@ -41,7 +41,7 @@ def test_FixedSizeStepper():
 
 def test_markov_streamline():
 
-    east = np.array([1, 0, 0])
+    east = np.array([1., 0, 0])
 
     class MoveEastWest(object):
         def get_direction(self, location, prev_step):
@@ -283,6 +283,7 @@ def test_ProbabilisticOdfWeightedTracker():
 
     path = [False, False]
     for streamline in pwt:
+        print(streamline)
         if allclose(streamline, expected[0]):
             path[0] = True
         elif allclose(streamline, expected[1]):

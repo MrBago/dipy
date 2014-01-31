@@ -82,7 +82,7 @@ class FixedSizeStepper(object):
         return new_location
 
 
-def markov_streamline(get_direction, take_step, seed, first_step, maxlen):
+def _markov_streamline(get_direction, take_step, seed, first_step, maxlen):
     """Creates a streamline from seed
 
     Parameters
@@ -122,6 +122,16 @@ def markov_streamline(get_direction, take_step, seed, first_step, maxlen):
         pass
 
     return np.array(streamline)
+
+from .other import _work
+def markov_streamline(get_direction, take_step, seed, first_step, maxlen):
+    if hasattr(take_step, 'step_size'):
+        temp = np.empty((maxlen+1, 3), order='C')
+        seed = np.asarray(seed, dtype=float)
+        first_step = np.asarray(first_step, dtype=float)
+        return _work(get_direction, seed, first_step, temp, take_step.step_size)
+    else:
+        return _markov_streamline(get_direction, take_step, seed, first_step, maxlen)
 
 
 class MarkovIntegrator(object):
@@ -167,6 +177,7 @@ class MarkovIntegrator(object):
             indices of input data.
 
         """
+        self.msfun = markov_streamline
         self.model = model
         self.interpolator = interpolator
         self.seeds = seeds
@@ -216,6 +227,7 @@ class MarkovIntegrator(object):
 
     def _generate_streamlines(self, seeds):
         """A streamline generator"""
+        markov_streamline = self.msfun
         for s in seeds:
             directions = self._next_step(s, prev_step=None)
             directions = directions[:self.max_cross]
@@ -226,6 +238,8 @@ class MarkovIntegrator(object):
                 B = markov_streamline(self._next_step, self._take_step, s,
                                       first_step, self.maxlen)
                 yield np.concatenate([B[:0:-1], F], axis=0)
+
+class MyI(
 
 
 def _closest_peak(peak_directions, prev_step, cos_similarity):
@@ -434,7 +448,7 @@ class CDT_NNO(ClosestDirectionTracker):
                                          take_step, angle_limit, seeds,
                                          max_cross=max_cross, maxlen=maxlen,
                                          mask_voxel_size=mask_voxel_size,
-                                         affine=None)
+                                         affine=affine)
         self._data = self.interpolator.data
         self._voxel_size = self.interpolator.voxel_size
         self.reset_cache()

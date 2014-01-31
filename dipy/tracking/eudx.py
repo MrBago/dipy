@@ -184,7 +184,7 @@ class EuDX(object):
                 seed = np.random.rand(3) * edge
             else:
                 seed = seed_voxels[i]
-                if np.any(seed < 0.) or np.any(seed > edge):
+                if np.any(seed < -.5) or np.any(seed > edge + .5):
                     raise ValueError('Seed outside boundaries', seed)
             seed = np.ascontiguousarray(seed)
 

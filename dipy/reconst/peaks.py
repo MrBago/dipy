@@ -157,8 +157,24 @@ def peak_directions(odf, sphere, relative_peak_threshold=.5,
     return directions, values, indices
 
 
+from dipy.core.onetime import auto_attr
+from ..tracking.propspeed import prop_dir
 class PeaksAndMetrics(object):
     pass
+
+    @auto_attr
+    def _qa(self):
+        return self.gfa[..., None] * self.peak_indices >= 0
+
+    def _helper(self, qa_thr, ang_thr, total_weight):
+        self.qa_thr = qa_thr
+        self.ang_thr = ang_thr
+        self.total_weight = self.total_weight
+
+    def get_direction(self, loc, prev_dir):
+        prop_dir(loc, prev_dir, self._qa, self.peak_indices,
+                 self.sphere.vertices, self.qa_thr,
+                 self.ang_thr, self.total_weight)
 
 
 def _peaks_from_model_parallel(model, data, sphere, relative_peak_threshold,
