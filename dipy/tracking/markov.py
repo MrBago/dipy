@@ -129,9 +129,8 @@ def _markov_streamline(get_direction, take_step, seed, first_step, maxlen):
     return np.array(streamline)
 
 from .other import _work
-def markov_streamline(get_direction, take_step, seed, first_step, maxlen, vs):
+def markov_streamline(get_direction, take_step, seed, first_step, temp, vs):
     if hasattr(take_step, 'step_size'):
-        temp = np.empty((maxlen+1, 3), order='C')
         seed = np.asarray(seed, dtype=float)
         first_step = np.asarray(first_step, dtype=float)
         return _work(get_direction, seed, first_step, vs, 
@@ -236,16 +235,21 @@ class MarkovIntegrator(object):
         """A streamline generator"""
         markov_streamline = self.msfun
         vs = self.voxel_size
+        N = self.maxlen
+        temp = np.empty((2*N + 1, 3), dtype=float)
         for s in seeds:
             directions = self._next_step(s, prev_step=None)
             directions = directions[:self.max_cross]
             for first_step in directions:
+                F = temp[N:]
                 F = markov_streamline(self._next_step, self._take_step, s,
-                                      first_step, self.maxlen, vs)
+                                      first_step, F, vs)
                 first_step = -first_step
+                B = temp[N::-1]
                 B = markov_streamline(self._next_step, self._take_step, s,
-                                      first_step, self.maxlen, vs)
-                yield np.concatenate([B[:0:-1], F], axis=0)
+                                      first_step, B, vs)
+                yield temp[N - B:N + F + 1]
+                # yield np.concatenate([B[:0:-1], F], axis=0)
 
 class _Fluf(object):
     def __init__(self, ss):

@@ -68,19 +68,21 @@ from ..reconst.interpolate import OutsideImage, NearestNeighborInterpolator
 @cython.wraparound(False)
 @cython.cdivision(True)
 def _work(get_direction,
-          np.ndarray[np.float_t, ndim=1, mode='c'] seed,
-          np.ndarray[np.float_t, ndim=1, mode='c'] first_step,
-          np.ndarray[np.float_t, ndim=1, mode='c'] voxel_size,
-          np.ndarray[np.float_t, ndim=2, mode='c'] streamline,
+          np.ndarray[np.float_t, ndim=1] seed,
+          np.ndarray[np.float_t, ndim=1] first_step,
+          np.ndarray[np.float_t, ndim=1] voxel_size,
+          np.ndarray[np.float_t, ndim=2] streamline,
           double stepsize,
           int fixedstep):
 
     if (seed.shape[0] != 3 or first_step.shape[0] != 3 or voxel_size.shape[0]
         != 3 or streamline.shape[1] != 3):
         raise ValueError()
+    if (streamline.strides[1] != sizeof(double)):
+        raise ValueError()
 
     cdef:
-        np.ndarray[np.float_t, ndim=1, mode='c'] dir = first_step
+        np.ndarray[np.float_t, ndim=1, mode='c'] dir = first_step.copy()
         np.ndarray[np.float_t, ndim=1, mode='c'] point = seed.copy()
         size_t i
         double step_dir[3] #, vs[3]
@@ -97,7 +99,13 @@ def _work(get_direction,
     """
 
     for i in range(0, streamline.shape[0]):
-        dir = get_direction(point, dir)
+        try:
+            dir = get_direction(point, dir)
+        except IndexError:
+            i -= 1
+            break
+        except StopIteration:
+            break
         # Only copy the point into streamline if get_direction does not raise
         for j in range(3):
             streamline[i, j] = point[j]
@@ -108,5 +116,5 @@ def _work(get_direction,
         # Compute the next point in the streamline
         take_step(step_dir, &streamline[i, 0], &point[0], stepsize)
 
-    return streamline[:i+1]
+    return i
 

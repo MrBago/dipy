@@ -267,7 +267,7 @@ def prop_dir(cnp.ndarray[cnp.float_t, ndim=1, mode='c'] point,
                   double total_weight):
 
     cdef:
-        cnp.ndarray[cnp.float_t, ndim=1, mode='c'] nd = direction.copy(),
+        # cnp.ndarray[cnp.float_t, ndim=1, mode='c'] nd = direction.copy(),
         cnp.npy_intp qa_shape[4], strides[4]
         cnp.npy_intp s
     for i in range(4):
@@ -277,15 +277,13 @@ def prop_dir(cnp.ndarray[cnp.float_t, ndim=1, mode='c'] point,
     s = _propagation_direction(&point[0], &direction[0], &qa[0, 0, 0, 0],
                                &ind[0, 0, 0, 0], &odf_vertices[0, 0], qa_thr,
                                ang_thr, &qa_shape[0], &strides[0],
-                               &nd[0], total_weight)
+                               &direction[0], total_weight)
     if s:
-        return nd
-    else:
-        return None
+        return direction
 
 
 @cython.cdivision(True)
-cdef cnp.npy_intp _propagation_direction(double *point,double* dx,double* qa,\
+cdef cnp.npy_intp _propagation_direction(double *point,double* prev,double* qa,\
                                 double *ind, double *odf_vertices,\
                                 double qa_thr, double ang_thr,\
                                 cnp.npy_intp *qa_shape,cnp.npy_intp* strides,\
@@ -297,7 +295,7 @@ cdef cnp.npy_intp _propagation_direction(double *point,double* dx,double* qa,\
         double w[8],qa_tmp[PEAK_NO],ind_tmp[PEAK_NO]
         cnp.npy_intp index[24],i,j,m,xyz[4]
         double normd
-        # double dx[3]
+        double dx[3]
         cnp.npy_intp peaks=qa_shape[3]#number of allowed peaks e.g. for fa is 1 for gqi.qa is 5
 
     #calculate qa & ind of each of the 8 neighboring voxels
@@ -306,7 +304,7 @@ cdef cnp.npy_intp _propagation_direction(double *point,double* dx,double* qa,\
     _trilinear_interpolation_iso(point,<double *>w,<cnp.npy_intp *>index)
     #check if you are outside of the volume
     for i from 0<=i<3:
-        # dx[i] = prev[i]
+        dx[i] = prev[i]
         new_direction[i]=0
         if index[7*3+i] >= qa_shape[i] or index[i] < 0:
             return 0
