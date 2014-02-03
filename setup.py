@@ -82,6 +82,8 @@ for modulename, other_sources in (
     ('dipy.reconst.vec_val_sum', []),
     ('dipy.reconst.quick_squash', []),
     ('dipy.tracking.distances', []),
+    ('dipy.tracking.other', []),
+    ('dipy.tracking.myfoo', []),
     ('dipy.tracking.vox2track', []),
     ('dipy.tracking.propspeed', [])):
     pyx_src = pjoin(*modulename.split('.')) + '.pyx'

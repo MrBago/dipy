@@ -20,6 +20,11 @@ from ..reconst.interpolate import OutsideImage, NearestNeighborInterpolator
 from ..reconst.peaks import default_sphere, peak_directions
 from . import utils
 
+class endstreamline(Exception):
+    pass
+class outsidearea(Exception):
+    pass
+
 
 class DirectionFinder(object):
 
@@ -124,14 +129,16 @@ def _markov_streamline(get_direction, take_step, seed, first_step, maxlen):
     return np.array(streamline)
 
 from .other import _work
-def markov_streamline(get_direction, take_step, seed, first_step, maxlen):
+def markov_streamline(get_direction, take_step, seed, first_step, maxlen, vs):
     if hasattr(take_step, 'step_size'):
         temp = np.empty((maxlen+1, 3), order='C')
         seed = np.asarray(seed, dtype=float)
         first_step = np.asarray(first_step, dtype=float)
-        return _work(get_direction, seed, first_step, temp, take_step.step_size)
+        return _work(get_direction, seed, first_step, vs, 
+                     temp, take_step.step_size, 1)
     else:
-        return _markov_streamline(get_direction, take_step, seed, first_step, maxlen)
+        return _work(get_direction, seed, first_step, vs, 
+                     temp, take_step.overstep, 0)
 
 
 class MarkovIntegrator(object):
@@ -184,7 +191,7 @@ class MarkovIntegrator(object):
         self.max_cross = max_cross
         self.maxlen = maxlen
 
-        voxel_size = np.asarray(interpolator.voxel_size)
+        self.voxel_size = voxel_size = np.asarray(interpolator.voxel_size)
         self._tracking_space = tracking_space = np.eye(4)
         tracking_space[[0, 1, 2], [0, 1, 2]] = voxel_size
         tracking_space[:3, 3] = voxel_size / 2.
@@ -228,18 +235,43 @@ class MarkovIntegrator(object):
     def _generate_streamlines(self, seeds):
         """A streamline generator"""
         markov_streamline = self.msfun
+        vs = self.voxel_size
         for s in seeds:
             directions = self._next_step(s, prev_step=None)
             directions = directions[:self.max_cross]
             for first_step in directions:
                 F = markov_streamline(self._next_step, self._take_step, s,
-                                      first_step, self.maxlen)
+                                      first_step, self.maxlen, vs)
                 first_step = -first_step
                 B = markov_streamline(self._next_step, self._take_step, s,
-                                      first_step, self.maxlen)
+                                      first_step, self.maxlen, vs)
                 yield np.concatenate([B[:0:-1], F], axis=0)
 
-class MyI(
+class _Fluf(object):
+    def __init__(self, ss):
+        self.step_size = ss
+
+
+class MyI(MarkovIntegrator):
+
+    def __init__(self, get_direction, seeds, maxlen, step_size=1.,
+                 max_cross=None, affine=None):
+
+        self._next_step = get_direction
+        self.max_cross = max_cross
+        self.msfun = markov_streamline
+
+        self.seeds = seeds
+        self.maxlen = maxlen
+
+        self._tracking_space = np.eye(4)
+        if affine is None:
+            affine = self.affine = self._tracking_space.copy()
+        else:
+            affine = self.affine = affine
+        self.voxel_size = np.sqrt((affine * affine).sum(1))[:-1]
+
+        self._take_step = _Fluf(step_size)
 
 
 def _closest_peak(peak_directions, prev_step, cos_similarity):

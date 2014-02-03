@@ -157,24 +157,32 @@ def peak_directions(odf, sphere, relative_peak_threshold=.5,
     return directions, values, indices
 
 
-from dipy.core.onetime import auto_attr
+# from dipy.core.onetime import auto_attr
 from ..tracking.propspeed import prop_dir
 class PeaksAndMetrics(object):
-    pass
 
-    @auto_attr
-    def _qa(self):
-        return self.gfa[..., None] * self.peak_indices >= 0
-
-    def _helper(self, qa_thr, ang_thr, total_weight):
+    def set_stop_conditions(self, qa, qa_thr, ang_thr, total_weight):
+        self._qa = qa
+        self._ind = self.peak_indices.astype(float)
         self.qa_thr = qa_thr
         self.ang_thr = ang_thr
-        self.total_weight = self.total_weight
+        self.total_weight = total_weight
 
-    def get_direction(self, loc, prev_dir):
-        prop_dir(loc, prev_dir, self._qa, self.peak_indices,
-                 self.sphere.vertices, self.qa_thr,
-                 self.ang_thr, self.total_weight)
+    def _initial_direction(self, loc):
+        idx = tuple(int(round(i)) for i in loc)
+        peaks = self.peak_indices[idx]
+        qa = self._qa[idx]
+        peaks = peaks[qa > self.qa_thr]
+        return self.sphere.vertices[peaks]
+
+    def get_direction(self, loc, prev_step):
+
+        if prev_step is None:
+            return self._initial_direction(loc)
+
+        return prop_dir(loc, prev_step, self._qa, self._ind,
+                        self.sphere.vertices, self.qa_thr, self.ang_thr,
+                        self.total_weight)
 
 
 def _peaks_from_model_parallel(model, data, sphere, relative_peak_threshold,
@@ -485,6 +493,7 @@ def peaks_from_model(model, data, sphere, relative_peak_threshold,
     qa_array /= global_max
 
     pam = PeaksAndMetrics()
+    pam.sphere = sphere
     pam.peak_dirs = peak_dirs
     pam.peak_values = peak_values
     pam.peak_indices = peak_indices

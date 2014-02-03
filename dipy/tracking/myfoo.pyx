@@ -5,6 +5,8 @@ cimport numpy as cnp
 
 cdef extern from "dpy_math.h" nogil:
     int signbit(double x)
+    double ceil(double x)
+    double floor(double x)
 
 
 @cython.profile(False)
@@ -58,6 +60,31 @@ def step_to_b(cnp.ndarray[cnp.float64_t, ndim=1, mode='c'] point,
 
     return new_point
 
+@cython.boundscheck(False)
+@cython.profile(False)
+def step_to_T(cnp.ndarray[cnp.float64_t, ndim=2, mode='c'] point,
+              cnp.ndarray[cnp.float64_t, ndim=2, mode='c'] direction,
+              cnp.ndarray[cnp.float64_t, ndim=2, mode='c'] voxel_size,
+              double overstep,
+              int mode):
+
+    if (point.shape[1] != 3 or
+        direction.shape[1] != 3 or
+        voxel_size.shape[1] != 3):
+        raise ValueError()
+
+    if mode:
+        fun = stepToBoundry1
+    else:
+        fun = stepToBoundry
+
+    cdef cnp.ndarray[cnp.float64_t, ndim=2, mode='c'] new_point = point.copy()
+    for i in range(point.shape[0]):
+        fun(&point[i, 0], &direction[i, 0], &voxel_size[i, 0],
+            &new_point[i, 0], overstep)
+    return new_point
+
+
 
 @cython.boundscheck(False)
 @cython.profile(False)
@@ -92,7 +119,7 @@ cdef void stepToBoundry(double *point,
         double smallest_step
 
     for i in range(3):
-        step_sizes[i] = voxel_size[i] * (not signbit(direction[i]))
+        step_sizes[i] = voxel_size[i] * (1 - signbit(direction[i]))
         step_sizes[i] -= python_mod(point[i], voxel_size[i])
         step_sizes[i] /= direction[i]
 
@@ -105,3 +132,31 @@ cdef void stepToBoundry(double *point,
     for i in range(3):
         new_point[i] = point[i] + smallest_step * direction[i]
 
+@cython.wraparound(False)
+@cython.boundscheck(False)
+@cython.profile(False)
+@cython.cdivision(True)
+cdef void stepToBoundry1(double *point,
+                         double *direction,
+                         double *voxel_size,
+                         double *new_point,
+                         double overstep
+                        ) nogil:
+
+    cdef:
+        double step_sizes[3]
+        double smallest_step
+
+    for i in range(3):
+        step_sizes[i] = not signbit(direction[i])
+        step_sizes[i] -= point[i] - floor(point[i])
+        step_sizes[i] /= direction[i]
+
+    smallest_step = step_sizes[0]
+    for i in range(1, 3):
+        if step_sizes[i] < smallest_step:
+            smallest_step = step_sizes[i]
+
+    smallest_step += overstep
+    for i in range(3):
+        new_point[i] = point[i] + smallest_step * direction[i]
