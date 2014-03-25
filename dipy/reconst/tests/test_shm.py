@@ -21,7 +21,8 @@ from dipy.reconst.shm import (real_sph_harm, real_sym_sh_basis,
                               OpdtModel, normalize_data, hat, lcr_matrix,
                               smooth_pinv, bootstrap_data_array,
                               bootstrap_data_voxel, ResidualBootstrapWrapper,
-                              CsaOdfModel, QballModel, SphHarmFit)
+                              CsaOdfModel, QballModel, SphHarmFit,
+                              ch_basis)
 
 
 def test_sph_harm_ind_list():
@@ -100,6 +101,38 @@ def test_real_sym_sh_basis():
 
     fibernav_basis, m, n = real_sym_sh_basis(4, sphere.theta, sphere.phi)
     assert_array_almost_equal(fibernav_basis, expected)
+
+
+def test_ch_basis():
+    sphere = hemi_icosahedron.subdivide(1)
+    B1, m2, n2, scale2 = real_sym_sh_basis(8, sphere.theta, sphere.phi, True)
+    B2, m1, n1, scale1 = real_sym_sh_mrtrix(8, sphere.theta, sphere.phi, True)
+
+    # forward backward change should be identity
+    ch12 = ch_basis(m1, n1, scale1, m2, n2, scale2)
+    ch21 = ch_basis(m2, n2, scale2, m1, n1, scale1)
+    assert_array_almost_equal(np.dot(ch21, ch12), np.eye(len(ch12)))
+
+    # both sets of coefficients represent the same function
+    chB = ch_basis(m1, n1, scale1, m2, n2, scale2)
+    coeff1 = np.random.random(len(m1))
+    coeff2 = np.dot(chB, coeff1)
+    assert_array_almost_equal(np.dot(B1, coeff1), np.dot(B2, coeff2))
+
+    # both sets of coefficients represent the same function
+    # Increasing sh order should result in zeros for those coeff
+    B2, m2, n2, scale2 = real_sym_sh_mrtrix(10, sphere.theta, sphere.phi, True)
+    chB = ch_basis(m1, n1, scale1, m2, n2, scale2)
+    assert_equal(chB.shape, (len(m2), len(m1)))
+    coeff1 = np.random.random(len(m1))
+    coeff2 = np.dot(chB, coeff1)
+    assert_array_equal(coeff2[len(coeff1):], 0.)
+
+    # Assert that decreasing sh order cases truncation of coeff
+    ch21 = ch_basis(m2, n2, scale2, m1, n1, scale1)
+    expected = coeff1
+    coeff1 = np.dot(ch21, coeff2)
+    assert_array_almost_equal(coeff1, expected)
 
 
 def test_smooth_pinv():

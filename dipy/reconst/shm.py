@@ -82,7 +82,7 @@ def real_sph_harm(m, n, theta, phi):
     return real_sh
 
 
-def real_sym_sh_mrtrix(sh_order, theta, phi):
+def real_sym_sh_mrtrix(sh_order, theta, phi, return_scale=False):
     """
     Compute real spherical harmonics as in mrtrix, where the real harmonic
     $Y^m_n$ is defined to be::
@@ -121,11 +121,15 @@ def real_sym_sh_mrtrix(sh_order, theta, phi):
 
     m = -m
     real_sh = real_sph_harm(m, n, theta, phi)
-    real_sh /= np.where(m == 0, 1., np.sqrt(2))
-    return real_sh, m, n
+    scale = np.where(m == 0, 1., 1./np.sqrt(2))
+    real_sh *= scale
+    if return_scale:
+        return real_sh, m, n, scale
+    else:
+        return real_sh, m, n
 
 
-def real_sym_sh_basis(sh_order, theta, phi):
+def real_sym_sh_basis(sh_order, theta, phi, return_scale=False):
     """Samples a real symmetric spherical harmonic basis at point on the sphere
 
     Samples the basis functions up to order `sh_order` at points on the sphere
@@ -168,7 +172,27 @@ def real_sym_sh_basis(sh_order, theta, phi):
     theta = np.reshape(theta, [-1, 1])
 
     real_sh = real_sph_harm(m, n, theta, phi)
-    return real_sh, m, n
+    if return_scale:
+        return real_sh, m, n, np.ones(n.shape)
+    else:
+        return real_sh, m, n
+
+
+def ch_basis(m1, n1, scale1, m2, n2, scale2):
+    """Computes the matrix that mapps between 2 discrete real_sph_harm basis.
+
+    For example compute the mapping from real_sym_sh_basis to
+    real_sym_sh_mrtrix
+
+    m1, n1, scale1 :
+        The order, degree and scale of the input basis
+    m2, n2, scale2 :
+        THe order, degeree and scale of the output basis
+
+    """
+    n2, m2, scale2 = [np.reshape(a, (-1, 1)) for a in [n2, m2, scale2]]
+    remap = (n1 == n2) & (m1 == m2)
+    return remap * (scale2 / scale1)
 
 
 sph_harm_lookup = {None: real_sym_sh_basis,
