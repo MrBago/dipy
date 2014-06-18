@@ -313,6 +313,11 @@ def test_csd_superres():
                                 relative_peak_threshold=.2,
                                 min_separation_angle=0)
 
+    print(S)
+    print(d)
+    print(v)
+    print(ind)
+
     # Check that there are two peaks
     assert_equal(len(d), 2)
 
