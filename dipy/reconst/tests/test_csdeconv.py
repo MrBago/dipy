@@ -313,7 +313,7 @@ def test_csd_superres():
                                 relative_peak_threshold=.2,
                                 min_separation_angle=0)
 
-    print(S)
+    print(sticks)
     print(d)
     print(v)
     print(ind)
