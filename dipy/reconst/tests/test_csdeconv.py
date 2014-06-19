@@ -310,7 +310,7 @@ def test_csd_superres():
 
     # print local_maxima(fit16.odf(default_sphere), default_sphere.edges)
     d, v, ind = peak_directions(fit16.odf(default_sphere), default_sphere,
-                                relative_peak_threshold=.2,
+                                relative_peak_threshold=.0,
                                 min_separation_angle=0)
 
     print(sticks)
@@ -323,6 +323,7 @@ def test_csd_superres():
 
     # Check that peaks line up with sticks
     cos_sim = (abs(d * sticks)).sum(1) ** .5
+    print(cos_sim)
     assert_(all(cos_sim > .99))
 
 
