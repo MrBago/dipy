@@ -24,6 +24,47 @@ ctypedef vector[Streamline] Streamlines
 
 @cython.wraparound(False)
 @cython.boundscheck(False)
+cdef double _length_bago(Streamline streamline):
+    cdef:
+        np.npy_intp i
+        double out = 0
+
+    for i in range(1, streamline.shape[0]):
+        out += sqrt(pow(streamline[i, 0] - streamline[i-1, 0], 2.0) +
+                    pow(streamline[i, 1] - streamline[i-1, 1], 2.0) +
+                    pow(streamline[i, 2] - streamline[i-1, 2], 2.0))
+    return out
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
+def length_bago(list streamlines):
+
+    cdef:
+        np.npy_intp i
+        np.ndarray sl_array
+        np.ndarray[dtype=np.float64_t, ndim=1, mode='c'] out = np.empty(len(streamlines))
+
+    np_float64 = np.float64
+    np_float32 = np.float32
+    for i in range(len(streamlines)):
+        sl_array = streamlines[i]
+        assert sl_array.shape[1] == 3
+
+        if sl_array.dtype == np_float64:
+            out[i] = _length_bago[double2d](<double2d> sl_array)
+        elif sl_array.dtype == np_float32:
+            out[i] = _length_bago[float2d](<float2d> sl_array)
+        else:
+            sl_array = sl_array.astype(np_float64)
+            out[i] = _length_bago[double2d](<double2d> sl_array)
+
+
+    return out
+
+
+@cython.wraparound(False)
+@cython.boundscheck(False)
 cdef void _length(Streamlines streamlines, double[:] out) nogil:
     cdef:
         unsigned int i
