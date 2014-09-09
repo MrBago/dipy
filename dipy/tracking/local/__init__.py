@@ -1,13 +1,15 @@
 import numpy as np
 
 from .localtrack import local_tracker
-from .tissue_classifier import ThresholdTissueClassifier, TissueClassifier
+from .tissue_classifier import ThresholdTissueClassifier, ActTissueClassifier, TissueClassifier
 from .direction_getter import DirectionGetter
 from .direction_getter_py import ProbabilisticDirectionGetter
 from dipy.tracking import utils
 
-__all__ = ["LocalTracking", "ThresholdTissueClassifier",
+
+__all__ = ["LocalTracking", "ThresholdTissueClassifier", "ActTissueClassifier"
            "ProbabilisticDirectionGetter"]
+
 
 class LocalTracking(object):
     """A streamline generator for local tracking methods"""
@@ -113,3 +115,4 @@ class LocalTracking(object):
                     parts = (B[stepsB-1:0:-1], F[:stepsF])
                     streamline = np.concatenate(parts, axis=0)
                 yield streamline
+

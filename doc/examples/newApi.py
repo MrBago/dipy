@@ -6,7 +6,9 @@ import nibabel as nib
 
 # Import tracking stuff
 from dipy.tracking.local import (ProbabilisticDirectionGetter,
-                                 ThresholdTissueClassifier, LocalTracking)
+                                 ThresholdTissueClassifier,
+                                 ActTissueClassifier,
+                                 LocalTracking)
 from dipy.tracking import utils
 
 # Import a few different models as examples
@@ -53,6 +55,32 @@ hdr['voxel_order'] = 'ras'
 
 # make trackvis affine
 trackvis_affine = utils.affine_for_trackvis(hdr['voxel_size'])
+
+def prob_tracking_example_acttc(model, data, mask, N, hdr, filename):
+    # Fit data to model
+    fit = model.fit(data, mask)
+
+    # Create objects to be passed to tracker
+    powdg = ProbabilisticOdfWightedDirectionGetter(fit, default_sphere, 45.)
+    gfa = fit.gfa
+    gfa = np.where(np.isnan(gfa), 0., gfa)
+    include_map = 1 - np.sqrt(gfa) # fake white matter partial volume estimate
+    exclude_map = np.zeros(gfa.shape) # fake csf partial volume estimate
+    acttc = ActTissueClassifier(include_map, exclude_map)
+
+    # Create around N seeds
+    seeds = utils.seeds_from_mask(gfa > .25, 2, affine=affine)
+    seeds = seeds[::len(seeds) // N + 1]
+
+    # Create streamline generator
+    streamlines = LocalTracking(powdg, acttc, seeds, affine, .5, max_cross=1)
+    trk_streamlines = utils.move_streamlines(streamlines,
+                                         input_space=affine,
+                                         output_space=trackvis_affine)
+
+    trk = ((streamline, None, None) for streamline in trk_streamlines)
+    # Save streamlines
+    nib.trackvis.write(filename, trk, hdr)
 
 
 def prob_tracking_example(model, data, mask, N, hdr, filename):
@@ -114,6 +142,11 @@ start = time.time()
 prob_tracking_example(csamodel, data, mask, N, hdr, "SolidAngle.trk")
 print time.time() - start
 
+start = time.time()
+prob_tracking_example_acttc(csamodel, data, mask, N, hdr, "SolidAngle_acttc.trk")
+print time.time() - start
+
+
 # Deterministic tracking (eudx like)
 start = time.time()
 detr_tracking_example(csamodel, data, mask, N, hdr, "SolidAngle_Detr.trk")
@@ -128,5 +161,3 @@ csdmodel = ConstrainedSphericalDeconvModel(gtab, r, sh_order=10,
 start = time.time()
 prob_tracking_example(csdmodel, data, mask, N, hdr, "SphereDeconv.trk")
 print time.time() - start
-
-
