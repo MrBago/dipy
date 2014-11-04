@@ -5,7 +5,8 @@ from dipy.core.sphere import unit_octahedron
 from dipy.reconst.shm import SphHarmFit, SphHarmModel
 from dipy.direction import ProbabilisticDirectionGetter
 
-def test_ProbabilisticDirectionGetter():
+
+def test_probabilistic_direction_getter():
     # Test the constructors and errors of the ProbabilisticDirectionGetter
 
     class SillyModel(SphHarmModel):
@@ -50,4 +51,6 @@ def test_ProbabilisticDirectionGetter():
     pmf[0, 0, 0, 0] = -1
     npt.assert_raises(ValueError, ProbabilisticDirectionGetter.from_pmf, pmf,
                       90, unit_octahedron)
+
+    1. / 0
 
