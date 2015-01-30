@@ -403,6 +403,9 @@ def csdeconv(dwsignal, sh_order, X, B_reg, lambda_=1., tau=0.1):
     fodf = np.dot(B_reg, fodf_sh)
     # set threshold on FOD amplitude used to identify 'negative' values
     threshold = tau * np.mean(np.dot(B_reg, fodf_sh))
+    if fodf.min() > threshold:
+        fodf_sh = np.linalg.lstsq(X, dwsignal)[0]
+        return fodf_sh, 0
 
     k = []
     convergence = 50
