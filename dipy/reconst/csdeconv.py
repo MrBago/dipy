@@ -58,6 +58,30 @@ class AxSymShResponse(object):
         return np.dot(self.dwi_response, B.T)
 
 
+def multi_tissue_basis(gtab, sh_order, iso_comp):
+    """Builds a basis for multi-shell CSD model"""
+    r, theta, phi = cart2sphere(*gtab.gradients.T)
+    m, n = sph_harm_ind_list(sh_order)
+
+    # Add a row for each isotropic component
+    pad = np.zeros(iso_comp, int)
+    n = np.concatenate((pad, n))
+    m = np.concatenate((pad, m))
+
+    B = real_sph_harm(m, n, theta[:, None], phi[:, None])
+    if iso_comp > 0:
+        B[np.ix(gtab.b0s_mask, n > 0)] = 0.
+    else:
+        B[gtab.b0s_mask, :] = 0.
+
+    # Makes a table describing the compartment associated with each row of the
+    # basis matrix
+    comp = np.empty(B.shape[1] + iso_comp)
+    comp[:iso_comp] = np.arange(iso_comp)
+    comp[iso_comp:] = iso_comp
+    return B, comp, m, n
+
+
 class ConstrainedSphericalDeconvModel(SphHarmModel):
 
     def __init__(self, gtab, response, reg_sphere=None, sh_order=8, lambda_=1,
@@ -128,10 +152,8 @@ class ConstrainedSphericalDeconvModel(SphHarmModel):
             msg += "than the actual data points"
             warnings.warn(msg, UserWarning)
 
-        x, y, z = gtab.gradients[self._where_dwi].T
-        r, theta, phi = cart2sphere(x, y, z)
         # for the gradient sphere
-        self.B_dwi = real_sph_harm(m, n, theta[:, None], phi[:, None])
+        self.B_dwi, comp, m, n = multi_tissue_basis(gtab, sh_order, 0)
 
         # for the sphere used in the regularization positivity constraint
         if reg_sphere is None:
@@ -159,6 +181,7 @@ class ConstrainedSphericalDeconvModel(SphHarmModel):
             m_response = m
             self.response_scaling = response[1]
         r_rh = sh_to_rh(r_sh, m_response, n_response)
+
         self.R = forward_sdeconv_mat(r_rh, n)
 
         # scale lambda_ to account for differences in the number of
@@ -174,8 +197,7 @@ class ConstrainedSphericalDeconvModel(SphHarmModel):
 
     @multi_voxel_fit
     def fit(self, data):
-        dwi_data = data[self._where_dwi]
-        shm_coeff, _ = csdeconv(dwi_data, self._X, self.B_reg, self.tau,
+        shm_coeff, _ = csdeconv(data, self._X, self.B_reg, self.tau,
                                 P=self._P)
         return SphHarmFit(self, shm_coeff, None)
 
@@ -214,11 +236,11 @@ class ConstrainedSphericalDeconvModel(SphHarmModel):
         S0 = np.asarray(S0)[..., None]
         scaling = S0 / self.response_scaling
         # This is the key operation: convolve and multiply by S0:
-        pre_pred_sig = scaling * np.dot(predict_matrix, sh_coeff)
+        pred_sig  = scaling * np.dot(predict_matrix, sh_coeff)
 
         # Now put everything in its right place:
-        pred_sig = np.zeros(pre_pred_sig.shape[:-1] + (gtab.bvals.shape[0],))
-        pred_sig[..., ~gtab.b0s_mask] = pre_pred_sig
+        # pred_sig = np.zeros(pre_pred_sig.shape[:-1] + (gtab.bvals.shape[0],))
+        # pred_sig[..., ~gtab.b0s_mask] = pre_pred_sig
         pred_sig[..., gtab.b0s_mask] = S0
 
         return pred_sig
