@@ -62,24 +62,19 @@ def multi_tissue_basis(gtab, sh_order, iso_comp):
     """Builds a basis for multi-shell CSD model"""
     r, theta, phi = cart2sphere(*gtab.gradients.T)
     m, n = sph_harm_ind_list(sh_order)
-
-    # Add a row for each isotropic component
-    pad = np.zeros(iso_comp, int)
-    n = np.concatenate((pad, n))
-    m = np.concatenate((pad, m))
-
     B = real_sph_harm(m, n, theta[:, None], phi[:, None])
-    if iso_comp > 0:
-        B[np.ix(gtab.b0s_mask, n > 0)] = 0.
-    else:
-        B[gtab.b0s_mask, :] = 0.
 
-    # Makes a table describing the compartment associated with each row of the
-    # basis matrix
-    comp = np.empty(B.shape[1] + iso_comp)
-    comp[:iso_comp] = np.arange(iso_comp)
-    comp[iso_comp:] = iso_comp
-    return B, comp, m, n
+    if iso_comp == 0:
+        B[gtab.b0s_mask, :] = 0.
+        return B
+    else:
+        B[np.ix(gtab.b0s_mask, n > 0)] = 0.
+
+    iso = np.empty([B.shape[0], iso_comp])
+    iso[:] = real_sph_harm(0, 0, 0, 0)
+
+    B = np.concatenate([iso, B], axis=1)
+    return B, m, n
 
 
 class ConstrainedSphericalDeconvModel(SphHarmModel):
@@ -153,7 +148,7 @@ class ConstrainedSphericalDeconvModel(SphHarmModel):
             warnings.warn(msg, UserWarning)
 
         # for the gradient sphere
-        self.B_dwi, comp, m, n = multi_tissue_basis(gtab, sh_order, 0)
+        self.B_dwi, m, n = multi_tissue_basis(gtab, sh_order, 0)
 
         # for the sphere used in the regularization positivity constraint
         if reg_sphere is None:
