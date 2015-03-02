@@ -117,6 +117,7 @@ class ConstrainedSphericalDeconvModel(SphHarmModel):
         r_rh = sh_to_rh(r_sh, m, n)
 
         self.R = forward_sdeconv_mat(r_rh, n)
+        1. / 0
 
         # scale lambda_ to account for differences in the number of
         # SH coefficients and number of mapped directions
@@ -585,55 +586,55 @@ def odf_deconv(odf_sh, R, B_reg, lambda_=1., tau=0.1, r2_term=False):
            Distributions
     .. [3] Descoteaux, M, PhD thesis, INRIA Sophia-Antipolis, 2008.
     """
-    # In ConstrainedSDTModel.fit, odf_sh is divided by its norm (Z) and sometimes
-    # the norm is 0 which creates NaNs.
-    if np.any(np.isnan(odf_sh)):
-        return np.zeros_like(odf_sh), 0
-
-    # Generate initial fODF estimate, which is the ODF truncated at SH order 4
-    fodf_sh = np.linalg.lstsq(R, odf_sh)[0]
-    fodf_sh[15:] = 0
-
-    fodf = np.dot(B_reg, fodf_sh)
-
-    # if sharpening a q-ball odf (it is NOT properly normalized), we need to
-    # force normalization otherwise, for DSI, CSA, SHORE, Tensor odfs, they are
-    # normalized by construction
-    if ~r2_term :
-        Z = np.linalg.norm(fodf)
-        fodf_sh /= Z
-
-    fodf = np.dot(B_reg, fodf_sh)
-    threshold = tau * np.max(np.dot(B_reg, fodf_sh))
-    #print(np.min(fodf), np.max(fodf), np.mean(fodf), threshold, tau)
-
-    k = []
-    convergence = 50
-    for num_it in range(1, convergence + 1):
-        A = np.dot(B_reg, fodf_sh)
-        k2 = np.nonzero(A < threshold)[0]
-
-        if (k2.shape[0] + R.shape[0]) < B_reg.shape[1]:
-            warnings.warn(
-            'too few negative directions identified - failed to converge')
-            return fodf_sh, num_it
-
-        if num_it > 1 and k.shape[0] == k2.shape[0]:
-            if (k == k2).all():
-                return fodf_sh, num_it
-
-        k = k2
-        M = np.concatenate((R, lambda_ * B_reg[k, :]))
-        ODF = np.concatenate((odf_sh, np.zeros(k.shape)))
-        try:
-            fodf_sh = np.linalg.lstsq(M, ODF)[0]
-        except np.linalg.LinAlgError as lae:
-            # SVD did not converge in Linear Least Squares in current
-            # voxel. Proceeding with initial SH estimate for this voxel.
-            pass
-
-    warnings.warn('maximum number of iterations exceeded - failed to converge')
-    return fodf_sh, num_it
+    # In ConstrainedSDTModel.fit, odf_sh is divided by its norm (Z) and sometimes 
+    # the norm is 0 which creates NaNs. 
+    if np.any(np.isnan(odf_sh)): 
+        return np.zeros_like(odf_sh), 0 
+ 
+    # Generate initial fODF estimate, which is the ODF truncated at SH order 4 
+    fodf_sh = np.linalg.lstsq(R, odf_sh)[0] 
+    fodf_sh[15:] = 0 
+ 
+    fodf = np.dot(B_reg, fodf_sh) 
+ 
+    # if sharpening a q-ball odf (it is NOT properly normalized), we need to 
+    # force normalization otherwise, for DSI, CSA, SHORE, Tensor odfs, they are 
+    # normalized by construction 
+    if ~r2_term : 
+        Z = np.linalg.norm(fodf) 
+        fodf_sh /= Z 
+ 
+    fodf = np.dot(B_reg, fodf_sh) 
+    threshold = tau * np.max(np.dot(B_reg, fodf_sh)) 
+    #print(np.min(fodf), np.max(fodf), np.mean(fodf), threshold, tau) 
+ 
+    k = [] 
+    convergence = 50 
+    for num_it in range(1, convergence + 1): 
+        A = np.dot(B_reg, fodf_sh) 
+        k2 = np.nonzero(A < threshold)[0] 
+ 
+        if (k2.shape[0] + R.shape[0]) < B_reg.shape[1]: 
+            warnings.warn( 
+            'too few negative directions identified - failed to converge') 
+            return fodf_sh, num_it 
+ 
+        if num_it > 1 and k.shape[0] == k2.shape[0]: 
+            if (k == k2).all(): 
+                return fodf_sh, num_it 
+ 
+        k = k2 
+        M = np.concatenate((R, lambda_ * B_reg[k, :])) 
+        ODF = np.concatenate((odf_sh, np.zeros(k.shape))) 
+        try: 
+            fodf_sh = np.linalg.lstsq(M, ODF)[0] 
+        except np.linalg.LinAlgError as lae: 
+            # SVD did not converge in Linear Least Squares in current 
+            # voxel. Proceeding with initial SH estimate for this voxel. 
+            pass 
+ 
+    warnings.warn('maximum number of iterations exceeded - failed to converge') 
+    return fodf_sh, num_it 
 
 
 def odf_sh_to_sharp(odfs_sh, sphere, basis=None, ratio=3 / 15., sh_order=8,
