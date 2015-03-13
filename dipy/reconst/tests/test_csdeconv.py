@@ -19,7 +19,7 @@ from dipy.reconst.csdeconv import (ConstrainedSphericalDeconvModel,
 from dipy.reconst.peaks import peak_directions
 from dipy.core.sphere_stats import angular_similarity
 from dipy.reconst.shm import (CsaOdfModel, QballModel, sf_to_sh, sh_to_sf,
-                              real_sym_sh_basis, sph_harm_ind_list, real_sph_harm)
+                              real_sym_sh_basis, sph_harm_ind_list)
 from dipy.reconst.shm import lazy_index
 from dipy.core.geometry import cart2sphere
 import dipy.reconst.dti as dti
@@ -89,9 +89,7 @@ def test_recursive_response_calibration():
     assert_equal(directions_gt_single.shape[0], 1)
 
     sphere = Sphere(xyz=gtab.gradients[where_dwi])
-    n = np.arange(0, sh_order + 1, 2)
-    B = real_sph_harm(0, n, sphere.theta[:, None], sphere.phi[:, None])
-    sf = np.dot(response.dwi_response, B.T)
+    sf = response.on_sphere(sphere)
     S = np.concatenate(([response.S0], sf))
 
     tenmodel = dti.TensorModel(gtab, min_signal=0.001)

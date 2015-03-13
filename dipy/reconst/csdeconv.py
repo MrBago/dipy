@@ -27,7 +27,18 @@ from dipy.core.sphere import HemiSphere
 
 
 class AxSymShResponse(object):
+    """A simple wrapper for response functions represented using only axially
+    symmetric, even spherical harmonic functions (ie, m == 0 and n even).
 
+    Parameters:
+    -----------
+    S0 : float
+        Signal with no diffusion weighting.
+    dwi_response : array
+        Response function signal as coefficients to axially symmetric, even
+        spherical harmonic.
+
+    """
     def __init__(self, S0, dwi_response, bvalue=None):
         self.S0 = S0
         self.dwi_response = dwi_response
@@ -35,6 +46,17 @@ class AxSymShResponse(object):
         self.m = np.zeros(len(dwi_response))
         self.sh_order = 2 * (len(dwi_response) - 1)
         self.n = np.arange(0, self.sh_order + 1, 2)
+
+    def basis(self, sphere):
+        """A basis that maps the response coefficients onto a sphere."""
+        theta = sphere.theta[:, None]
+        phi = sphere.phi[:, None]
+        return real_sph_harm(self.m, self.n, theta, phi)
+
+    def on_sphere(self, sphere):
+        """Evaluates the response function on sphere."""
+        B = self.basis(sphere)
+        return np.dot(self.dwi_response, B.T)
 
 
 class ConstrainedSphericalDeconvModel(SphHarmModel):
