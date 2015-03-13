@@ -7,14 +7,13 @@ from scipy.special import lpn, gamma
 import scipy.linalg as la
 import scipy.linalg.lapack as ll
 
-from dipy.data import small_sphere, get_sphere
+from dipy.data import small_sphere, get_sphere, default_sphere
 from dipy.reconst.multi_voxel import multi_voxel_fit
 from dipy.reconst.shm import (sph_harm_ind_list, real_sph_harm,
                               order_from_ncoef, sph_harm_lookup, lazy_index,
                               SphHarmFit, real_sym_sh_basis, sh_to_rh,
                               gen_dirac, forward_sdeconv_mat, SphHarmModel,
                               sh_to_sf)
-from dipy.data import get_sphere
 from dipy.core.geometry import cart2sphere
 from dipy.core.ndindex import ndindex
 from dipy.sims.voxel import single_tensor
@@ -822,7 +821,8 @@ def auto_response(gtab, data, roi_center=None, roi_radius=10, fa_thr=0.7,
 
 def recursive_response(gtab, data, mask=None, sh_order=8, peak_thr=0.01,
                        init_fa=0.08, init_trace=0.0021, iter=8,
-                       convergence=0.001, parallel=True):
+                       convergence=0.001, parallel=True,
+                       sphere=default_sphere):
     """ Recursive calibration of response function using peak threshold
 
     Parameters
@@ -846,6 +846,8 @@ def recursive_response(gtab, data, mask=None, sh_order=8, peak_thr=0.01,
         maximum number of iterations for calibration
     convergence : float
         convergence criterion, maximum relative change of SH coefficients
+    sphere : Sphere
+        The sphere used for peak finding.
 
     Returns
     -------
@@ -870,7 +872,6 @@ def recursive_response(gtab, data, mask=None, sh_order=8, peak_thr=0.01,
     S0 = 1
     evals = fa_trace_to_lambdas(init_fa, init_trace)
     res_obj = (evals, S0)
-    sphere = get_sphere('symmetric724')
 
     no_params = ((sh_order + 1) * (sh_order + 2)) / 2
     if mask is None:
