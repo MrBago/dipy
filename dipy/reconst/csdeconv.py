@@ -68,7 +68,7 @@ def multi_tissue_basis(gtab, sh_order, iso_comp):
         B[gtab.b0s_mask, :] = 0.
         return B
     else:
-        B[np.ix(gtab.b0s_mask, n > 0)] = 0.
+        B[np.ix_(gtab.b0s_mask, n > 0)] = 0.
 
     iso = np.empty([B.shape[0], iso_comp])
     iso[:] = real_sph_harm(0, 0, 0, 0)

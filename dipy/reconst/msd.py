@@ -1,74 +1,146 @@
+import numpy as np
+import numpy.linalg as la
+
+from dipy.core.gradients import GradientTable
+from dipy.sims.voxel import single_tensor
+
+from dipy.core.geometry import cart2sphere
 from dipy.data import default_sphere
+from dipy.reconst import shm
+from dipy.reconst import csdeconv as csd
+from dipy.reconst.multi_voxel import multi_voxel_fit
+
 
 from cvxopt import matrix
+from cvxopt import solvers
 from cvxopt.solvers import qp
+solvers.options['show_progress'] = False
 
-def foo(signals, B, iso_comp, m, n, bval):
+csf_md=3e-3
+gm_md=.76e-3
+evals_d = np.array([.992, .254, .254]) * 1e-3
 
-    n_coeff = len(n)
+def sim_response(sh_order, bvals, evals=evals_d, csf_md=3e-3, gm_md=.76e-3):
+    bvals = np.array(bvals, copy=True)
+    evecs = np.zeros((3, 3))
+    z = np.array([0, 0, 1.])
+    evecs[:, 0] = z
+    evecs[:2, 1:] = np.eye(2)
 
-    # Check assumptions about the basis:
-    # Isotropic compartments are the beginning.
-    assert np.all(B[:iso_comp + 1] == B[0, 0])
-    # Only even SH degrees are present.
-    assert np.all((n % 2) == 0)
-    # B has the right shape.
-    assert B.shape[0] == len(bval)
-    assert (B.shape[1] - iso_comp) == len(n) == len(m)
-    # SH degrees are in ascending order.
-    assert np.all(n[m == 0] == np.arange(0, n[-1] + 1, 2))
+    n = np.arange(0, sh_order + 1, 2)
+    m = np.zeros_like(n)
 
-    # TODO: round bval
+    big_sphere = default_sphere.subdivide()
+    theta, phi = big_sphere.theta, big_sphere.phi
 
-    B_dwi = B[:, iso_comp:]
-    B_ax_sym = B_dwi[:, m == 0]
+    B = shm.real_sph_harm(m, n, theta[:, None], phi[:, None])
+    A = shm.real_sph_harm(0, 0, 0, 0)
 
-    bvalues = np.unique(bval)
-    R = np.empty((len(bvalues), n_coeff))
+    response = np.empty([len(bvals), len(n) + 2])
+    for i, bvalue in enumerate(bvals):
+        gtab = GradientTable(big_sphere.vertices * bvalue)
+        wm_response = single_tensor(gtab, 1., evals, evecs, snr=None)
+        response[i, 2:] = np.linalg.lstsq(B, wm_response)[0]
 
-    for i, b in enumerate(bvalues):
-        part = bval == b
-        for c in range(iso_comp):
-            R[i, c] = signals[c][part].mean() / B[0, 0]
-        dwi_signal = signals[iso_comp]
-        rh = np.linalg.lstsq(B_ax_sym[:, part], dwi_signal)
-        R[i, iso_comp:] = rh[n // 2]
-    return bvalues, R
+        response[i, 0] = np.exp(-bvalue * csf_md) / A
+        response[i, 1] = np.exp(-bvalue * gm_md) / A
+
+    return MultiShellResponse(response, sh_order, bvals)
+
+class MultiShellResponse(object):
+
+    def __init__(self, response, sh_order, shells):
+        self.response = response
+        self.sh_order = sh_order
+        self.n = np.arange(0, sh_order + 1, 2)
+        self.m = np.zeros_like(self.n)
+        self.shells = shells
+        self.n_isotripic = response.shape[1] - len(self.n)
+        if self.n_isotripic < 1:
+            raise ValueError("sh_order and shape of response do not agree")
+
+    @property
+    def iso(self):
+        return self.response.shape[1] - (self.sh_order // 2) - 1
 
 
 def closest(haystack, needle):
-    diff = abs(haystack[None, :] - needle)
+    diff = abs(haystack[:, None] - needle)
     return diff.argmin(axis=0)
 
 
-class MultiShellDeconvModel(ConstrainedSphericalDeconvModel):
+def _inflate_response(response, gtab, n):
+    if any((n % 2) != 0) or (n.max() // 2) >= response.sh_order:
+        raise ValueError("Response and n do not match")
 
-    def __init__(self, gtab, responses, reg_sphere=default_sphere, sh_order=8,
-                 tissue_classes=3, *args, **kwargs):
+    iso = response.iso
+    n_idx = np.empty(len(n) + iso, dtype=int)
+    n_idx[:iso] = np.arange(0, iso)
+    n_idx[iso:] = n // 2 + iso
+
+    b_idx = closest(response.shells, gtab.bvals)
+
+    return response.response[np.ix_(b_idx, n_idx)]
+
+class MultiShellDeconvModel(shm.SphHarmModel):
+
+    def __init__(self, gtab, response, reg_sphere=default_sphere, iso=2):
         """
         """
-        SphHarmModel.__init__(self, gtab)
-        B, m, n = multi_tissue_basis(gtab, sh_order, tissue_classes)
-        uniq_bval, R = foo(responses, B, tissue_classes, m, n, gtab.bval)
-        multiplier_matrix = R[closest(uniq_bval, gtab.bvals)]
+        sh_order = response.sh_order
+        super(MultiShellDeconvModel, self).__init__(gtab)
+        B, m, n = csd.multi_tissue_basis(gtab, sh_order, iso)
+        multiplier_matrix = _inflate_response(response, gtab, n)
 
-        r, theta, phi = cart2sphere(reg_sphere.x, self.sphere.y, self.sphere.z)
-        B_reg = real_sph_harm(m, n, theta[:, None], phi[:, None])
+        r, theta, phi = cart2sphere(reg_sphere.x, reg_sphere.y, reg_sphere.z)
+        odf_reg, _, _ = shm.real_sym_sh_basis(sh_order, theta, phi)
+        reg = np.zeros([i + iso for i in odf_reg.shape])
+        reg[:iso, :iso] = np.eye(iso) * 1000.
+        reg[iso:, iso:] = odf_reg
+
         X = B * multiplier_matrix
 
-        self.fitter = QpFitter(X, B_reg)
+        self.fitter = QpFitter(X, reg)
+        self.sh_order = sh_order
         self._X = X
         self.sphere = reg_sphere
+        self.response = response
         self.B_dwi = B
-        self.R = R
-        self.shells = uniq_bval
+
+    def predict(self, params, gtab=None, S0=None):
+        if gtab is None:
+            X = self._X
+        else:
+            iso = self.response.iso
+            B, m, n = csd.multi_tissue_basis(gtab, self.sh_order, iso)
+            multiplier_matrix = _inflate_response(self.response, gtab, n)
+            X = B * multiplier_matrix
+        return np.dot(params, X.T)
 
     @multi_voxel_fit
     def fit(self, data):
         coeff = self.fitter(data)
-        return MSDecovFit(self, coeff, None)
+        return MSDeconvFit(self, coeff, None)
 
-def _rank(A, tol=1e-5):
+
+class MSDeconvFit(shm.SphHarmFit):
+
+    def __init__(self, model, coeff, mask):
+        self._shm_coef = coeff
+        self.mask = mask
+        self.model = model
+
+    @property
+    def shm_coeff(self):
+        return self._shm_coef[..., self.model.response.iso:]
+
+    @property
+    def volume_fractions(self):
+        tissue_classes = self.model.response.iso + 1
+        return self._shm_coef[..., :tissue_classes]
+
+
+def _rank(A, tol=1e-8):
     s = la.svd(A, False, False)
     threshold = (s[0] * tol)
     rnk = (s > threshold).sum()
@@ -78,7 +150,7 @@ def _rank(A, tol=1e-5):
 class QpFitter(object):
 
     def _lstsq_initial(self, z):
-        fodf_sh = _solve_cholesky(self._P, z)
+        fodf_sh = csd._solve_cholesky(self._P, z)
         s = np.dot(self._reg, fodf_sh)
         init = {'x':matrix(fodf_sh),
                 's':matrix(s.clip(1e-10))}
@@ -86,12 +158,13 @@ class QpFitter(object):
 
     def __init__(self, X, reg):
         self._P = P = np.dot(X.T, X)
+        self._X = X
 
         # No super res for now.
         assert _rank(P) == P.shape[0]
 
         self._reg = reg
-        self._P_init = np.dot(X[:, :N].T, X[:, :N])
+        # self._P_init = np.dot(X[:, :N].T, X[:, :N])
 
         # Make cvxopt matrix types for later re-use.
         self._P_mat = matrix(P)
