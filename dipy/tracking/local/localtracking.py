@@ -11,6 +11,8 @@ from dipy.tracking import utils
 TissueTypes = Bunch(OUTSIDEIMAGE=-1, INVALIDPOINT=0, TRACKPOINT=1, ENDPOINT=2)
 
 
+"Some change"
+
 class LocalTracking(object):
     """A streamline generator for local tracking methods"""
 
